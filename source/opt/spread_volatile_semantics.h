@@ -95,7 +95,7 @@ class SpreadVolatileSemantics : public Pass {
   std::unordered_set<uint32_t> EntryFunctionsToSpreadVolatileSemanticsForVar(
       uint32_t var_id) {
     auto itr = var_ids_to_entry_fn_for_volatile_semantics_.find(var_id);
-    if (itr == var_ids_to_entry_fn_for_volatile_semantics_.end()) return {};
+    if (itr == var_ids_to_entry_fn_for_volatile_semantics_.end()) return std::unordered_set<uint32_t>();
     return itr->second;
   }
 
