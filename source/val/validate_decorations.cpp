@@ -190,6 +190,13 @@ uint32_t getBaseAlignment(uint32_t member_id, bool roundUp,
   // Minimal alignment is byte-aligned.
   uint32_t baseAlignment = 1;
   switch (inst->opcode()) {
+    case SpvOpTypeSampledImage:
+    case SpvOpTypeSampler:
+    case SpvOpTypeImage:
+      if (vstate.HasCapability(SpvCapabilityBindlessTextureNV))
+        return baseAlignment = vstate.samplerimage_variable_address_mode() / 8;
+      assert(0);
+      return 0;
     case SpvOpTypeInt:
     case SpvOpTypeFloat:
       baseAlignment = words[2] / 8;
@@ -256,6 +263,13 @@ uint32_t getScalarAlignment(uint32_t type_id, ValidationState_t& vstate) {
   const auto inst = vstate.FindDef(type_id);
   const auto& words = inst->words();
   switch (inst->opcode()) {
+    case SpvOpTypeSampledImage:
+    case SpvOpTypeSampler:
+    case SpvOpTypeImage:
+      if (vstate.HasCapability(SpvCapabilityBindlessTextureNV))
+        return vstate.samplerimage_variable_address_mode() / 8;
+      assert(0);
+      return 0;
     case SpvOpTypeInt:
     case SpvOpTypeFloat:
       return words[2] / 8;
@@ -296,6 +310,13 @@ uint32_t getSize(uint32_t member_id, const LayoutConstraints& inherited,
   const auto inst = vstate.FindDef(member_id);
   const auto& words = inst->words();
   switch (inst->opcode()) {
+    case SpvOpTypeSampledImage:
+    case SpvOpTypeSampler:
+    case SpvOpTypeImage:
+      if (vstate.HasCapability(SpvCapabilityBindlessTextureNV))
+        return vstate.samplerimage_variable_address_mode() / 8;
+      assert(0);
+      return 0;
     case SpvOpTypeInt:
     case SpvOpTypeFloat:
       return words[2] / 8;
@@ -809,6 +830,56 @@ spv_result_t CheckDecorationsOfEntryPoints(ValidationState_t& vstate) {
               ++num_workgroup_variables_with_block;
             if (hasDecoration(var_instr->id(), SpvDecorationAliased, vstate))
               ++num_workgroup_variables_with_aliased;
+          }
+        }
+
+        if (spvIsVulkanEnv(vstate.context()->target_env)) {
+          const auto* models = vstate.GetExecutionModels(entry_point);
+          const bool has_frag =
+              models->find(SpvExecutionModelFragment) != models->end();
+          const bool has_vert =
+              models->find(SpvExecutionModelVertex) != models->end();
+          for (const auto& decoration :
+               vstate.id_decorations(var_instr->id())) {
+            if (decoration == SpvDecorationFlat ||
+                decoration == SpvDecorationNoPerspective ||
+                decoration == SpvDecorationSample ||
+                decoration == SpvDecorationCentroid) {
+              // VUID 04670 already validates these decorations are input/output
+              if (storage_class == SpvStorageClassInput &&
+                  (models->size() > 1 || has_vert)) {
+                return vstate.diag(SPV_ERROR_INVALID_ID, var_instr)
+                       << vstate.VkErrorID(6202)
+                       << "OpEntryPoint interfaces variable must not be vertex "
+                          "execution model with an input storage class for "
+                          "Entry Point id "
+                       << entry_point << ".";
+              } else if (storage_class == SpvStorageClassOutput &&
+                         (models->size() > 1 || has_frag)) {
+                return vstate.diag(SPV_ERROR_INVALID_ID, var_instr)
+                       << vstate.VkErrorID(6201)
+                       << "OpEntryPoint interfaces variable must not be "
+                          "fragment "
+                          "execution model with an output storage class for "
+                          "Entry Point id "
+                       << entry_point << ".";
+              }
+            }
+          }
+
+          const bool has_flat =
+              hasDecoration(var_instr->id(), SpvDecorationFlat, vstate);
+          if (has_frag && storage_class == SpvStorageClassInput && !has_flat &&
+              ((vstate.IsFloatScalarType(type_id) &&
+                vstate.GetBitWidth(type_id) == 64) ||
+               vstate.IsIntScalarOrVectorType(type_id))) {
+            return vstate.diag(SPV_ERROR_INVALID_ID, var_instr)
+                     << vstate.VkErrorID(4744)
+                     << "Fragment OpEntryPoint operand "
+                     << interface << " with Input interfaces with integer or "
+                                     "float type must have a Flat decoration "
+                                     "for Entry Point id "
+                     << entry_point << ".";
           }
         }
       }
