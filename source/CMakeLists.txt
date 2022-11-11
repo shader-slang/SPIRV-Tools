@@ -318,11 +318,13 @@ set(SPIRV_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_logicals.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_memory.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_memory_semantics.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_mesh_shading.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_misc.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_mode_setting.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_non_uniform.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_ray_query.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_ray_tracing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_scopes.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_small_type_uses.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/val/validate_type.cpp

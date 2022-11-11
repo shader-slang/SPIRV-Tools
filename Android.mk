@@ -61,6 +61,7 @@ SPVTOOLS_SRC_FILES := \
 		source/val/validate_instruction.cpp \
 		source/val/validate_memory.cpp \
 		source/val/validate_memory_semantics.cpp \
+		source/val/validate_mesh_shading.cpp \
 		source/val/validate_misc.cpp \
 		source/val/validate_mode_setting.cpp \
 		source/val/validate_layout.cpp \
@@ -69,6 +70,7 @@ SPVTOOLS_SRC_FILES := \
 		source/val/validate_non_uniform.cpp \
 		source/val/validate_primitives.cpp \
 		source/val/validate_ray_query.cpp \
+		source/val/validate_ray_tracing.cpp \
 		source/val/validate_scopes.cpp \
 		source/val/validate_small_type_uses.cpp \
 		source/val/validate_type.cpp

@@ -179,8 +179,9 @@ uint32_t align(uint32_t x, uint32_t alignment) {
 }
 
 // Returns base alignment of struct member. If |roundUp| is true, also
-// ensure that structs and arrays are aligned at least to a multiple of 16
-// bytes.
+// ensure that structs, arrays, and matrices are aligned at least to a
+// multiple of 16 bytes.  (That is, when roundUp is true, this function
+// returns the *extended* alignment as it's called by the Vulkan spec.)
 uint32_t getBaseAlignment(uint32_t member_id, bool roundUp,
                           const LayoutConstraints& inherited,
                           MemberConstraints& constraints,
@@ -226,6 +227,7 @@ uint32_t getBaseAlignment(uint32_t member_id, bool roundUp,
         baseAlignment =
             componentAlignment * (num_columns == 3 ? 4 : num_columns);
       }
+      if (roundUp) baseAlignment = align(baseAlignment, 16u);
     } break;
     case SpvOpTypeArray:
     case SpvOpTypeRuntimeArray:
@@ -659,7 +661,8 @@ bool hasDecoration(uint32_t id, SpvDecoration decoration,
 }
 
 // Returns true if all ids of given type have a specified decoration.
-bool checkForRequiredDecoration(uint32_t struct_id, SpvDecoration decoration,
+bool checkForRequiredDecoration(uint32_t struct_id,
+                                std::function<bool(SpvDecoration)> checker,
                                 SpvOp type, ValidationState_t& vstate) {
   const auto& members = getStructMembers(struct_id, vstate);
   for (size_t memberIdx = 0; memberIdx < members.size(); memberIdx++) {
@@ -667,10 +670,10 @@ bool checkForRequiredDecoration(uint32_t struct_id, SpvDecoration decoration,
     if (type != vstate.FindDef(id)->opcode()) continue;
     bool found = false;
     for (auto& dec : vstate.id_decorations(id)) {
-      if (decoration == dec.dec_type()) found = true;
+      if (checker(dec.dec_type())) found = true;
     }
     for (auto& dec : vstate.id_decorations(struct_id)) {
-      if (decoration == dec.dec_type() &&
+      if (checker(dec.dec_type()) &&
           (int)memberIdx == dec.struct_member_index()) {
         found = true;
       }
@@ -680,7 +683,7 @@ bool checkForRequiredDecoration(uint32_t struct_id, SpvDecoration decoration,
     }
   }
   for (auto id : getStructMembers(struct_id, SpvOpTypeStruct, vstate)) {
-    if (!checkForRequiredDecoration(id, decoration, type, vstate)) {
+    if (!checkForRequiredDecoration(id, checker, type, vstate)) {
       return false;
     }
   }
@@ -1222,30 +1225,48 @@ spv_result_t CheckDecorationsOfBuffers(ValidationState_t& vstate) {
               return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                      << "Structure id " << id << " decorated as " << deco_str
                      << " must not use GLSLPacked decoration.";
-            } else if (!checkForRequiredDecoration(id, SpvDecorationArrayStride,
-                                                   SpvOpTypeArray, vstate)) {
+            } else if (!checkForRequiredDecoration(
+                           id,
+                           [](SpvDecoration d) {
+                             return d == SpvDecorationArrayStride;
+                           },
+                           SpvOpTypeArray, vstate)) {
               return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                      << "Structure id " << id << " decorated as " << deco_str
                      << " must be explicitly laid out with ArrayStride "
                         "decorations.";
-            } else if (!checkForRequiredDecoration(id,
-                                                   SpvDecorationMatrixStride,
-                                                   SpvOpTypeMatrix, vstate)) {
+            } else if (!checkForRequiredDecoration(
+                           id,
+                           [](SpvDecoration d) {
+                             return d == SpvDecorationMatrixStride;
+                           },
+                           SpvOpTypeMatrix, vstate)) {
               return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                      << "Structure id " << id << " decorated as " << deco_str
                      << " must be explicitly laid out with MatrixStride "
                         "decorations.";
+            } else if (!checkForRequiredDecoration(
+                           id,
+                           [](SpvDecoration d) {
+                             return d == SpvDecorationRowMajor ||
+                                    d == SpvDecorationColMajor;
+                           },
+                           SpvOpTypeMatrix, vstate)) {
+              return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
+                     << "Structure id " << id << " decorated as " << deco_str
+                     << " must be explicitly laid out with RowMajor or "
+                        "ColMajor decorations.";
             } else if (blockRules &&
-                       (SPV_SUCCESS != (recursive_status = checkLayout(
-                                            id, sc_str, deco_str, true,
-                                            scalar_block_layout, 0,
-                                            constraints, vstate)))) {
+                       (SPV_SUCCESS !=
+                        (recursive_status = checkLayout(
+                             id, sc_str, deco_str, true, scalar_block_layout, 0,
+                             constraints, vstate)))) {
               return recursive_status;
             } else if (bufferRules &&
-                       (SPV_SUCCESS != (recursive_status = checkLayout(
-                                            id, sc_str, deco_str, false,
-                                            scalar_block_layout, 0,
-                                            constraints, vstate)))) {
+                       (SPV_SUCCESS !=
+                        (recursive_status = checkLayout(
+                             id, sc_str, deco_str, false, scalar_block_layout,
+                             0, constraints, vstate)))) {
               return recursive_status;
             }
           }
@@ -1272,32 +1293,6 @@ bool AtMostOncePerMember(SpvDecoration decoration) {
       return true;
     default:
       return false;
-  }
-}
-
-// Returns the string name for |decoration|.
-const char* GetDecorationName(SpvDecoration decoration) {
-  switch (decoration) {
-    case SpvDecorationAliased:
-      return "Aliased";
-    case SpvDecorationRestrict:
-      return "Restrict";
-    case SpvDecorationArrayStride:
-      return "ArrayStride";
-    case SpvDecorationOffset:
-      return "Offset";
-    case SpvDecorationMatrixStride:
-      return "MatrixStride";
-    case SpvDecorationRowMajor:
-      return "RowMajor";
-    case SpvDecorationColMajor:
-      return "ColMajor";
-    case SpvDecorationBlock:
-      return "Block";
-    case SpvDecorationBufferBlock:
-      return "BufferBlock";
-    default:
-      return "";
   }
 }
 
@@ -1333,7 +1328,7 @@ spv_result_t CheckDecorationsCompatibility(ValidationState_t& vstate) {
       if (already_used && AtMostOncePerId(dec_type)) {
         return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                << "ID '" << id << "' decorated with "
-               << GetDecorationName(dec_type)
+               << vstate.SpvDecorationString(dec_type)
                << " multiple times is not allowed.";
       }
       // Verify certain mutually exclusive decorations are not both applied on
@@ -1353,8 +1348,9 @@ spv_result_t CheckDecorationsCompatibility(ValidationState_t& vstate) {
         if (seen_per_id.find(excl_k) != seen_per_id.end()) {
           return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                  << "ID '" << id << "' decorated with both "
-                 << GetDecorationName(dec_type) << " and "
-                 << GetDecorationName(excl_dec_type) << " is not allowed.";
+                 << vstate.SpvDecorationString(dec_type) << " and "
+                 << vstate.SpvDecorationString(excl_dec_type)
+                 << " is not allowed.";
         }
       }
     } else if (SpvOpMemberDecorate == inst.opcode()) {
@@ -1366,7 +1362,7 @@ spv_result_t CheckDecorationsCompatibility(ValidationState_t& vstate) {
       if (already_used && AtMostOncePerMember(dec_type)) {
         return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                << "ID '" << id << "', member '" << member_id
-               << "' decorated with " << GetDecorationName(dec_type)
+               << "' decorated with " << vstate.SpvDecorationString(dec_type)
                << " multiple times is not allowed.";
       }
       // Verify certain mutually exclusive decorations are not both applied on
@@ -1386,8 +1382,9 @@ spv_result_t CheckDecorationsCompatibility(ValidationState_t& vstate) {
         if (seen_per_member.find(excl_k) != seen_per_member.end()) {
           return vstate.diag(SPV_ERROR_INVALID_ID, vstate.FindDef(id))
                  << "ID '" << id << "', member '" << member_id
-                 << "' decorated with both " << GetDecorationName(dec_type)
-                 << " and " << GetDecorationName(excl_dec_type)
+                 << "' decorated with both "
+                 << vstate.SpvDecorationString(dec_type) << " and "
+                 << vstate.SpvDecorationString(excl_dec_type)
                  << " is not allowed.";
         }
       }
