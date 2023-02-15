@@ -88,9 +88,9 @@ TEST_P(IntegerInstructionFoldingTest, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_TRUE(succeeded);
   if (inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    EXPECT_EQ(inst->opcode(), SpvOpConstant);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpConstant);
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::Constant* constant = const_mrg->GetConstantFromInst(inst);
     // We expect to see either integer types or 16-bit float types here.
@@ -896,15 +896,15 @@ TEST_P(IntVectorInstructionFoldingTest, Case) {
   // Fold the instruction to test.
   analysis::DefUseManager* def_use_mgr = context->get_def_use_mgr();
   Instruction* inst = def_use_mgr->GetDef(tc.id_to_fold);
-  SpvOp original_opcode = inst->opcode();
+  spv::Op original_opcode = inst->opcode();
   bool succeeded = context->get_instruction_folder().FoldInstruction(inst);
 
   // Make sure the instruction folded as expected.
   EXPECT_EQ(succeeded, inst == nullptr || inst->opcode() != original_opcode);
   if (succeeded && inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    std::vector<SpvOp> opcodes = {SpvOpConstantComposite};
+    std::vector<spv::Op> opcodes = {spv::Op::OpConstantComposite};
     EXPECT_THAT(opcodes, Contains(inst->opcode()));
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::Constant* result = const_mrg->GetConstantFromInst(inst);
@@ -993,9 +993,9 @@ TEST_P(DoubleVectorInstructionFoldingTest, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_TRUE(succeeded);
   if (succeeded && inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    std::vector<SpvOp> opcodes = {SpvOpConstantComposite};
+    std::vector<spv::Op> opcodes = {spv::Op::OpConstantComposite};
     EXPECT_THAT(opcodes, Contains(inst->opcode()));
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::Constant* result = const_mrg->GetConstantFromInst(inst);
@@ -1094,15 +1094,15 @@ TEST_P(FloatVectorInstructionFoldingTest, Case) {
   // Fold the instruction to test.
   analysis::DefUseManager* def_use_mgr = context->get_def_use_mgr();
   Instruction* inst = def_use_mgr->GetDef(tc.id_to_fold);
-  SpvOp original_opcode = inst->opcode();
+  spv::Op original_opcode = inst->opcode();
   bool succeeded = context->get_instruction_folder().FoldInstruction(inst);
 
   // Make sure the instruction folded as expected.
   EXPECT_EQ(succeeded, inst == nullptr || inst->opcode() != original_opcode);
   if (succeeded && inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    std::vector<SpvOp> opcodes = {SpvOpConstantComposite};
+    std::vector<spv::Op> opcodes = {spv::Op::OpConstantComposite};
     EXPECT_THAT(opcodes, Contains(inst->opcode()));
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::Constant* result = const_mrg->GetConstantFromInst(inst);
@@ -1222,9 +1222,10 @@ TEST_P(BooleanInstructionFoldingTest, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_TRUE(succeeded);
   if (inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    std::vector<SpvOp> bool_opcodes = {SpvOpConstantTrue, SpvOpConstantFalse};
+    std::vector<spv::Op> bool_opcodes = {spv::Op::OpConstantTrue,
+                                         spv::Op::OpConstantFalse};
     EXPECT_THAT(bool_opcodes, Contains(inst->opcode()));
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::BoolConstant* result =
@@ -1833,9 +1834,9 @@ TEST_P(FloatInstructionFoldingTest, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_TRUE(succeeded);
   if (inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    EXPECT_EQ(inst->opcode(), SpvOpConstant);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpConstant);
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::FloatConstant* result =
         const_mrg->GetConstantFromInst(inst)->AsFloatConstant();
@@ -2266,9 +2267,9 @@ TEST_P(DoubleInstructionFoldingTest, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_TRUE(succeeded);
   if (inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     inst = def_use_mgr->GetDef(inst->GetSingleWordInOperand(0));
-    EXPECT_EQ(inst->opcode(), SpvOpConstant);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpConstant);
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::FloatConstant* result =
         const_mrg->GetConstantFromInst(inst)->AsFloatConstant();
@@ -3153,7 +3154,7 @@ TEST_P(IntegerInstructionFoldingTestWithMap, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_NE(inst, nullptr);
   if (inst != nullptr) {
-    EXPECT_EQ(inst->opcode(), SpvOpConstant);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpConstant);
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::IntConstant* result =
         const_mrg->GetConstantFromInst(inst)->AsIntConstant();
@@ -3201,7 +3202,8 @@ TEST_P(BooleanInstructionFoldingTestWithMap, Case) {
   // Make sure the instruction folded as expected.
   EXPECT_NE(inst, nullptr);
   if (inst != nullptr) {
-    std::vector<SpvOp> bool_opcodes = {SpvOpConstantTrue, SpvOpConstantFalse};
+    std::vector<spv::Op> bool_opcodes = {spv::Op::OpConstantTrue,
+                                         spv::Op::OpConstantFalse};
     EXPECT_THAT(bool_opcodes, Contains(inst->opcode()));
     analysis::ConstantManager* const_mrg = context->get_constant_mgr();
     const analysis::BoolConstant* result =
@@ -3253,7 +3255,7 @@ TEST_P(GeneralInstructionFoldingTest, Case) {
   EXPECT_EQ(inst->type_id(), original_inst->type_id());
   EXPECT_TRUE((!succeeded) == (tc.expected_result == 0));
   if (succeeded) {
-    EXPECT_EQ(inst->opcode(), SpvOpCopyObject);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpCopyObject);
     EXPECT_EQ(inst->GetSingleWordInOperand(0), tc.expected_result);
   } else {
     EXPECT_EQ(inst->NumInOperands(), original_inst->NumInOperands());
@@ -4911,7 +4913,7 @@ TEST_P(ToNegateFoldingTest, Case) {
   EXPECT_EQ(inst->type_id(), original_inst->type_id());
   EXPECT_TRUE((!succeeded) == (tc.expected_result == 0));
   if (succeeded) {
-    EXPECT_EQ(inst->opcode(), SpvOpFNegate);
+    EXPECT_EQ(inst->opcode(), spv::Op::OpFNegate);
     EXPECT_EQ(inst->GetSingleWordInOperand(0), tc.expected_result);
   } else {
     EXPECT_EQ(inst->NumInOperands(), original_inst->NumInOperands());
@@ -7361,7 +7363,16 @@ INSTANTIATE_TEST_SUITE_P(CompositeExtractOrInsertMatchingTest, MatchingInstructi
             "%5 = OpCompositeConstruct %v2int %3 %4\n" +
             "OpReturn\n" +
             "OpFunctionEnd",
-        5, true)
+        5, true),
+    // Test case 16: Don't fold when type cannot be deduced to a constant.
+    InstructionFoldingCase<bool>(
+        Header() +
+            "%main = OpFunction %void None %void_func\n" +
+            "%main_lab = OpLabel\n" +
+            "%4 = OpCompositeInsert %struct_v2int_int_int %int_1 %struct_v2int_int_int_null 2\n" +
+            "OpReturn\n" +
+            "OpFunctionEnd",
+        4, false)
 ));
 
 INSTANTIATE_TEST_SUITE_P(DotProductMatchingTest, MatchingInstructionFoldingTest,
