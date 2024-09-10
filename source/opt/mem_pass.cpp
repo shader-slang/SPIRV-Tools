@@ -413,6 +413,7 @@ void MemPass::RemoveBlock(Function::iterator* bi) {
 }
 
 bool MemPass::RemoveUnreachableBlocks(Function* func) {
+  if (func->IsDeclaration()) return false;
   bool modified = false;
 
   // Mark reachable all blocks reachable from the function's entry block.
