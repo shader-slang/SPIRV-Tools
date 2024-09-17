@@ -27,6 +27,7 @@ SPVTOOLS_SRC_FILES := \
 		source/table.cpp \
 		source/text.cpp \
 		source/text_handler.cpp \
+		source/to_string.cpp \
 		source/util/bit_vector.cpp \
 		source/util/parse_number.cpp \
 		source/util/string_utils.cpp \
@@ -157,6 +158,7 @@ SPVTOOLS_OPT_SRC_FILES := \
 		source/opt/merge_return_pass.cpp \
 		source/opt/modify_maximal_reconvergence.cpp \
 		source/opt/module.cpp \
+		source/opt/opextinst_forward_ref_fixup_pass.cpp \
 		source/opt/optimizer.cpp \
 		source/opt/pass.cpp \
 		source/opt/pass_manager.cpp \
@@ -182,6 +184,7 @@ SPVTOOLS_OPT_SRC_FILES := \
 		source/opt/strip_debug_info_pass.cpp \
 		source/opt/strip_nonsemantic_info_pass.cpp \
 		source/opt/struct_cfg_analysis.cpp \
+		source/opt/struct_packing_pass.cpp \
 		source/opt/switch_descriptorset_pass.cpp \
 		source/opt/trim_capabilities_pass.cpp \
 		source/opt/type_manager.cpp \
