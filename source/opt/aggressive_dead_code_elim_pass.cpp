@@ -676,6 +676,7 @@ void AggressiveDCEPass::InitializeModuleScopeLiveInstructions() {
     auto op = dbg.GetShader100DebugOpcode();
     if (op == NonSemanticShaderDebugInfo100DebugCompilationUnit ||
         op == NonSemanticShaderDebugInfo100DebugEntryPoint ||
+        op == NonSemanticShaderDebugInfo100DebugSource ||
         op == NonSemanticShaderDebugInfo100DebugSourceContinued) {
       AddToWorklist(&dbg);
     }
@@ -1036,7 +1037,8 @@ void AggressiveDCEPass::InitExtensions() {
       "SPV_NV_cooperative_matrix",
       "SPV_KHR_cooperative_matrix",
       "SPV_KHR_ray_tracing_position_fetch",
-      "SPV_KHR_fragment_shading_rate"
+      "SPV_KHR_fragment_shading_rate",
+      "SPV_KHR_quad_control",
   });
   // clang-format on
 }
