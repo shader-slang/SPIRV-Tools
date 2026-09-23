@@ -2662,6 +2662,336 @@ TEST_F(MergeReturnPassTest, DebugFunctionDefinitionStillInEntryBlock) {
   SinglePassRunAndMatch<MergeReturnPass>(text, true);
 }
 
+TEST_F(MergeReturnPassTest, DebugFunctionDefinitionUseAfterFree) {
+  // Regression for KhronosGroup/SPIRV-Tools#6711: merge-return relocates this
+  // NonSemantic.Shader.DebugInfo.100 DebugFunctionDefinition (here with an
+  // attached core OpLine) and must not leave a dangling def-use pointer.
+  const std::string text = R"(; SPIR-V
+; Version: 1.5
+; Generator: Khronos Slang Compiler; 0
+; Bound: 222
+; Schema: 0
+; CHECK: DebugFunctionDefinition
+               OpCapability Shader
+               OpExtension "SPV_KHR_non_semantic_info"
+               OpExtension "SPV_KHR_storage_buffer_storage_class"
+          %2 = OpExtInstImport "NonSemantic.Shader.DebugInfo.100"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %computeMain "main" %g_values %g_valuesReturned %g_altValues %g_altValuesReturned %outputBuffer %gl_GlobalInvocationID
+               OpExecutionMode %computeMain LocalSize 2 1 1
+          %1 = OpString "//TEST(compute):COMPARE_COMPUTE(filecheck-buffer=BUF): -shaderobj -output-using-type
+//TEST(compute):COMPARE_COMPUTE(filecheck-buffer=BUF): -vk -shaderobj -output-using-type
+//TEST(compute):COMPARE_COMPUTE(filecheck-buffer=BUF): -vk -emit-spirv-directly -shaderobj -output-using-type
+//TEST(compute):COMPARE_COMPUTE(filecheck-buffer=BUF):-slang -shaderobj -mtl
+//DISABLE_TEST(compute):COMPARE_COMPUTE(filecheck-buffer=BUF):-slang -shaderobj -llvm
+
+//TEST_INPUT:ubuffer(data=[0 0], stride=4):out,name outputBuffer
+RWStructuredBuffer<uint> outputBuffer;
+
+static groupshared uint g_values[2];
+static uint g_altValues[2] = { 2, 3 };
+
+static groupshared uint g_valuesReturned[2];
+static uint g_altValuesReturned[2];
+
+uint[2] maybeGroupSharedReturn(uint id)
+{
+    if (id == 0)
+    {
+        return g_values;
+    }
+    else
+    {
+        return g_altValues;
+    }
+}
+
+[numthreads(2, 1, 1)]
+void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    g_values = { 1, 0 };
+    AllMemoryBarrierWithGroupSync();
+    uint tid = dispatchThreadID.x;
+    if (tid == 0)
+    {
+        g_valuesReturned[tid] = maybeGroupSharedReturn(tid)[tid];
+    }
+    else
+    {
+        g_altValuesReturned[tid] = maybeGroupSharedReturn(tid)[tid];
+    }
+
+    AllMemoryBarrierWithGroupSync();
+    if (tid == 0)
+    {
+        outputBuffer[tid] = g_valuesReturned[tid];
+    }
+    else
+    {
+        outputBuffer[tid] = g_altValuesReturned[tid];
+    }
+
+    // BUF: 1
+    // BUF: 3
+}
+"
+          %5 = OpString "/home/ubuntu/slang/report-spirv-opt-regression/tests/metal/groupshared-threadlocal-same-parameter.slang"
+               OpSource Slang 1
+         %26 = OpString "uint"
+         %35 = OpString "computeMain"
+         %53 = OpString "slangc"
+         %54 = OpString "-target spirv  -I \"/home/ubuntu/slang/report-spirv-opt-regression/build/Debug/bin\" -matrix-layout-column-major -O0 -stage compute -entry computeMain -g2"
+         %66 = OpString "g_altValues"
+         %70 = OpString "dispatchThreadID"
+         %86 = OpString "g_values"
+         %97 = OpString "tid"
+        %116 = OpString "g_valuesReturned"
+        %127 = OpString "maybeGroupSharedReturn"
+        %139 = OpString "id"
+        %171 = OpString "g_altValuesReturned"
+        %200 = OpString "__member0"
+        %202 = OpString "RWStructuredBuffer"
+        %204 = OpString "outputBuffer"
+               OpName %_dbgvar_dispatchThreadID "_dbgvar_dispatchThreadID"
+               OpName %_dbgvar_tid "_dbgvar_tid"
+               OpName %g_altValues "g_altValues"
+               OpName %dispatchThreadID "dispatchThreadID"
+               OpName %g_values "g_values"
+               OpName %tid "tid"
+               OpName %tid_0 "tid"
+               OpName %g_valuesReturned "g_valuesReturned"
+               OpName %id "id"
+               OpName %_dbgvar_id "_dbgvar_id"
+               OpName %id_0 "id"
+               OpName %maybeGroupSharedReturn "maybeGroupSharedReturn"
+               OpName %g_altValuesReturned "g_altValuesReturned"
+               OpName %RWStructuredBuffer "RWStructuredBuffer"
+               OpMemberName %RWStructuredBuffer 0 "__member0"
+               OpName %outputBuffer "outputBuffer"
+               OpName %computeMain "computeMain"
+               OpDecorate %gl_GlobalInvocationID BuiltIn GlobalInvocationId
+               OpDecorate %_ptr_StorageBuffer_uint ArrayStride 4
+               OpDecorate %_runtimearr_uint ArrayStride 4
+               OpDecorate %RWStructuredBuffer Block
+               OpMemberDecorate %RWStructuredBuffer 0 Offset 0
+               OpDecorate %outputBuffer Binding 0
+               OpDecorate %outputBuffer DescriptorSet 0
+       %void = OpTypeVoid
+          %4 = OpExtInst %void %2 DebugSource %5 %1
+       %uint = OpTypeInt 32 0
+    %uint_11 = OpConstant %uint 11
+     %uint_5 = OpConstant %uint 5
+   %uint_100 = OpConstant %uint 100
+         %10 = OpExtInst %void %2 DebugCompilationUnit %uint_100 %uint_5 %4 %uint_11
+         %12 = OpTypeFunction %void
+     %v3uint = OpTypeVector %uint 3
+%_ptr_Function_v3uint = OpTypePointer Function %v3uint
+%_ptr_Function_uint = OpTypePointer Function %uint
+        %int = OpTypeInt 32 1
+      %int_2 = OpConstant %int 2
+%_arr_uint_int_2 = OpTypeArray %uint %int_2
+%_ptr_Function__arr_uint_int_2 = OpTypePointer Function %_arr_uint_int_2
+    %uint_32 = OpConstant %uint 32
+     %uint_6 = OpConstant %uint 6
+%uint_131072 = OpConstant %uint 131072
+         %25 = OpExtInst %void %2 DebugTypeBasic %26 %uint_32 %uint_6 %uint_131072
+     %uint_3 = OpConstant %uint 3
+         %30 = OpExtInst %void %2 DebugTypeVector %25 %uint_3
+     %uint_0 = OpConstant %uint 0
+         %32 = OpExtInst %void %2 DebugTypeFunction %uint_0 %void %30
+    %uint_29 = OpConstant %uint 29
+         %34 = OpExtInst %void %2 DebugFunction %35 %32 %4 %uint_29 %uint_6 %10 %35 %uint_0 %uint_29
+         %52 = OpExtInst %void %2 DebugEntryPoint %34 %10 %53 %54
+         %57 = OpTypeFunction %_arr_uint_int_2
+     %uint_2 = OpConstant %uint 2
+         %59 = OpConstantComposite %_arr_uint_int_2 %uint_2 %uint_3
+%_ptr_Private__arr_uint_int_2 = OpTypePointer Private %_arr_uint_int_2
+         %64 = OpExtInst %void %2 DebugTypeArray %25 %uint_2
+    %uint_13 = OpConstant %uint 13
+     %uint_1 = OpConstant %uint 1
+%dispatchThreadID = OpExtInst %void %2 DebugLocalVariable %70 %30 %4 %uint_29 %uint_6 %34 %uint_0 %uint_1
+         %72 = OpExtInst %void %2 DebugExpression
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+    %uint_31 = OpConstant %uint 31
+%_ptr_Workgroup__arr_uint_int_2 = OpTypePointer Workgroup %_arr_uint_int_2
+    %uint_10 = OpConstant %uint 10
+    %uint_25 = OpConstant %uint 25
+         %89 = OpConstantComposite %_arr_uint_int_2 %uint_1 %uint_0
+  %uint_2376 = OpConstant %uint 2376
+    %uint_33 = OpConstant %uint 33
+        %tid = OpExtInst %void %2 DebugLocalVariable %97 %25 %4 %uint_33 %uint_10 %34 %uint_0
+    %uint_34 = OpConstant %uint 34
+       %bool = OpTypeBool
+    %uint_14 = OpConstant %uint 14
+    %uint_36 = OpConstant %uint 36
+     %uint_9 = OpConstant %uint 9
+%_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
+        %121 = OpTypeFunction %_arr_uint_int_2 %uint
+        %125 = OpExtInst %void %2 DebugTypeFunction %uint_0 %64 %25
+    %uint_16 = OpConstant %uint 16
+        %126 = OpExtInst %void %2 DebugFunction %127 %125 %4 %uint_16 %uint_9 %10 %127 %uint_0 %uint_16
+       %id_0 = OpExtInst %void %2 DebugLocalVariable %139 %25 %4 %uint_16 %uint_9 %126 %uint_0 %uint_1
+    %uint_18 = OpConstant %uint 18
+    %uint_12 = OpConstant %uint 12
+    %uint_20 = OpConstant %uint 20
+    %uint_24 = OpConstant %uint 24
+    %uint_40 = OpConstant %uint 40
+%_ptr_Private_uint = OpTypePointer Private %uint
+    %uint_43 = OpConstant %uint 43
+    %uint_44 = OpConstant %uint 44
+    %uint_46 = OpConstant %uint 46
+      %int_0 = OpConstant %int 0
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+%_runtimearr_uint = OpTypeRuntimeArray %uint
+%RWStructuredBuffer = OpTypeStruct %_runtimearr_uint
+%_ptr_StorageBuffer_RWStructuredBuffer = OpTypePointer StorageBuffer %RWStructuredBuffer
+        %198 = OpExtInst %void %2 DebugTypeArray %25 %uint_0
+        %199 = OpExtInst %void %2 DebugTypeMember %200 %198 %4 %uint_0 %uint_0 %uint_0 %uint_0 %uint_0
+        %201 = OpExtInst %void %2 DebugTypeComposite %202 %uint_1 %4 %uint_0 %uint_0 %10 %202 %uint_0 %uint_131072 %199
+     %uint_8 = OpConstant %uint 8
+    %uint_26 = OpConstant %uint 26
+    %uint_50 = OpConstant %uint 50
+    %uint_55 = OpConstant %uint 55
+%g_altValues = OpVariable %_ptr_Private__arr_uint_int_2 Private
+         %65 = OpExtInst %void %2 DebugGlobalVariable %66 %64 %4 %uint_11 %uint_13 %10 %66 %g_altValues %uint_0
+%gl_GlobalInvocationID = OpVariable %_ptr_Input_v3uint Input
+   %g_values = OpVariable %_ptr_Workgroup__arr_uint_int_2 Workgroup
+         %85 = OpExtInst %void %2 DebugGlobalVariable %86 %64 %4 %uint_10 %uint_25 %10 %86 %g_values %uint_0
+%g_valuesReturned = OpVariable %_ptr_Workgroup__arr_uint_int_2 Workgroup
+        %115 = OpExtInst %void %2 DebugGlobalVariable %116 %64 %4 %uint_13 %uint_25 %10 %116 %g_valuesReturned %uint_0
+%g_altValuesReturned = OpVariable %_ptr_Private__arr_uint_int_2 Private
+        %170 = OpExtInst %void %2 DebugGlobalVariable %171 %64 %4 %uint_14 %uint_13 %10 %171 %g_altValuesReturned %uint_0
+%outputBuffer = OpVariable %_ptr_StorageBuffer_RWStructuredBuffer StorageBuffer
+        %203 = OpExtInst %void %2 DebugGlobalVariable %204 %201 %4 %uint_8 %uint_26 %10 %204 %outputBuffer %uint_0
+%computeMain = OpFunction %void None %12
+         %13 = OpLabel
+%_dbgvar_dispatchThreadID = OpVariable %_ptr_Function_v3uint Function
+%_dbgvar_tid = OpVariable %_ptr_Function_uint Function
+         %23 = OpVariable %_ptr_Function__arr_uint_int_2 Function
+         %24 = OpVariable %_ptr_Function__arr_uint_int_2 Function
+         OpLine %1 1 0
+         %37 = OpExtInst %void %2 DebugFunctionDefinition %34 %computeMain
+         %38 = OpExtInst %void %2 DebugScope %34
+         %39 = OpExtInst %void %2 DebugLine %4 %uint_29 %uint_29 %uint_6 %uint_6
+         %55 = OpFunctionCall %_arr_uint_int_2 %56
+               OpStore %g_altValues %55
+         %73 = OpExtInst %void %2 DebugDeclare %dispatchThreadID %_dbgvar_dispatchThreadID %72
+         %74 = OpLoad %v3uint %gl_GlobalInvocationID
+         %77 = OpExtInst %void %2 DebugValue %dispatchThreadID %74 %72
+               OpStore %_dbgvar_dispatchThreadID %74
+         %79 = OpExtInst %void %2 DebugLine %4 %uint_31 %uint_31 %uint_5 %uint_6
+         %81 = OpExtInst %void %2 DebugLine %4 %uint_31 %uint_31 %uint_5 %uint_6
+         %82 = OpExtInst %void %2 DebugLine %4 %uint_31 %uint_31 %uint_5 %uint_6
+               OpStore %g_values %89
+         %91 = OpExtInst %void %2 DebugLine %4 %uint_32 %uint_32 %uint_5 %uint_6
+               OpControlBarrier %uint_2 %uint_1 %uint_2376
+         %94 = OpExtInst %void %2 DebugLine %4 %uint_33 %uint_33 %uint_5 %uint_6
+         %98 = OpExtInst %void %2 DebugDeclare %tid %_dbgvar_tid %72
+         %99 = OpLoad %v3uint %gl_GlobalInvocationID
+      %tid_0 = OpCompositeExtract %uint %99 0
+        %101 = OpExtInst %void %2 DebugValue %tid %tid_0 %72
+               OpStore %_dbgvar_tid %tid_0
+        %103 = OpExtInst %void %2 DebugLine %4 %uint_34 %uint_34 %uint_5 %uint_6
+        %106 = OpIEqual %bool %tid_0 %uint_0
+        %107 = OpExtInst %void %2 DebugLine %4 %uint_34 %uint_34 %uint_13 %uint_14
+               OpSelectionMerge %44 None
+               OpBranchConditional %106 %40 %42
+         %40 = OpLabel
+         %41 = OpExtInst %void %2 DebugScope %34
+        %110 = OpExtInst %void %2 DebugLine %4 %uint_36 %uint_36 %uint_9 %uint_10
+        %113 = OpExtInst %void %2 DebugLine %4 %uint_36 %uint_36 %uint_9 %uint_10
+        %118 = OpAccessChain %_ptr_Workgroup_uint %g_valuesReturned %tid_0
+        %119 = OpFunctionCall %_arr_uint_int_2 %maybeGroupSharedReturn %tid_0
+               OpStore %23 %119
+        %162 = OpAccessChain %_ptr_Function_uint %23 %tid_0
+        %163 = OpLoad %uint %162
+               OpStore %118 %163
+               OpBranch %44
+         %42 = OpLabel
+         %43 = OpExtInst %void %2 DebugScope %34
+        %166 = OpExtInst %void %2 DebugLine %4 %uint_40 %uint_40 %uint_9 %uint_10
+        %168 = OpExtInst %void %2 DebugLine %4 %uint_40 %uint_40 %uint_9 %uint_10
+        %173 = OpAccessChain %_ptr_Private_uint %g_altValuesReturned %tid_0
+        %174 = OpFunctionCall %_arr_uint_int_2 %maybeGroupSharedReturn %tid_0
+               OpStore %24 %174
+        %176 = OpAccessChain %_ptr_Function_uint %24 %tid_0
+        %177 = OpLoad %uint %176
+               OpStore %173 %177
+               OpBranch %44
+         %44 = OpLabel
+         %45 = OpExtInst %void %2 DebugScope %34
+        %180 = OpExtInst %void %2 DebugLine %4 %uint_43 %uint_43 %uint_5 %uint_6
+        %182 = OpExtInst %void %2 DebugLine %4 %uint_43 %uint_43 %uint_5 %uint_6
+               OpControlBarrier %uint_2 %uint_1 %uint_2376
+        %184 = OpExtInst %void %2 DebugLine %4 %uint_44 %uint_44 %uint_5 %uint_6
+        %186 = OpExtInst %void %2 DebugLine %4 %uint_44 %uint_44 %uint_13 %uint_14
+               OpSelectionMerge %50 None
+               OpBranchConditional %106 %46 %48
+         %46 = OpLabel
+         %47 = OpExtInst %void %2 DebugScope %34
+        %188 = OpExtInst %void %2 DebugLine %4 %uint_46 %uint_46 %uint_9 %uint_10
+        %190 = OpExtInst %void %2 DebugLine %4 %uint_46 %uint_46 %uint_9 %uint_10
+        %193 = OpAccessChain %_ptr_StorageBuffer_uint %outputBuffer %int_0 %tid_0
+        %207 = OpAccessChain %_ptr_Workgroup_uint %g_valuesReturned %tid_0
+        %208 = OpLoad %uint %207
+               OpStore %193 %208
+               OpBranch %50
+         %48 = OpLabel
+         %49 = OpExtInst %void %2 DebugScope %34
+        %211 = OpExtInst %void %2 DebugLine %4 %uint_50 %uint_50 %uint_9 %uint_10
+        %213 = OpExtInst %void %2 DebugLine %4 %uint_50 %uint_50 %uint_9 %uint_10
+        %214 = OpAccessChain %_ptr_StorageBuffer_uint %outputBuffer %int_0 %tid_0
+        %215 = OpAccessChain %_ptr_Private_uint %g_altValuesReturned %tid_0
+        %216 = OpLoad %uint %215
+               OpStore %214 %216
+               OpBranch %50
+         %50 = OpLabel
+         %51 = OpExtInst %void %2 DebugScope %34
+        %219 = OpExtInst %void %2 DebugLine %4 %uint_55 %uint_55 %uint_1 %uint_2
+               OpReturn
+               OpFunctionEnd
+         %56 = OpFunction %_arr_uint_int_2 None %57
+         %58 = OpLabel
+               OpReturnValue %59
+               OpFunctionEnd
+%maybeGroupSharedReturn = OpFunction %_arr_uint_int_2 None %121
+         %id = OpFunctionParameter %uint
+        %123 = OpLabel
+ %_dbgvar_id = OpVariable %_ptr_Function_uint Function
+        OpLine %1 1 0
+        %129 = OpExtInst %void %2 DebugFunctionDefinition %126 %maybeGroupSharedReturn
+        %130 = OpExtInst %void %2 DebugScope %126
+        %131 = OpExtInst %void %2 DebugLine %4 %uint_16 %uint_16 %uint_9 %uint_9
+        %140 = OpExtInst %void %2 DebugDeclare %id_0 %_dbgvar_id %72
+        %141 = OpExtInst %void %2 DebugValue %id_0 %id %72
+               OpStore %_dbgvar_id %id
+        %143 = OpExtInst %void %2 DebugLine %4 %uint_18 %uint_18 %uint_5 %uint_6
+        %145 = OpExtInst %void %2 DebugLine %4 %uint_18 %uint_18 %uint_5 %uint_6
+        %146 = OpIEqual %bool %id %uint_0
+        %147 = OpExtInst %void %2 DebugLine %4 %uint_18 %uint_18 %uint_12 %uint_13
+               OpSelectionMerge %136 None
+               OpBranchConditional %146 %132 %134
+        %132 = OpLabel
+        %133 = OpExtInst %void %2 DebugScope %126
+        %150 = OpExtInst %void %2 DebugLine %4 %uint_20 %uint_20 %uint_9 %uint_10
+        %152 = OpExtInst %void %2 DebugLine %4 %uint_20 %uint_20 %uint_9 %uint_10
+        %153 = OpLoad %_arr_uint_int_2 %g_values
+               OpReturnValue %153
+        %134 = OpLabel
+        %135 = OpExtInst %void %2 DebugScope %126
+        %155 = OpExtInst %void %2 DebugLine %4 %uint_24 %uint_24 %uint_9 %uint_10
+        %157 = OpExtInst %void %2 DebugLine %4 %uint_24 %uint_24 %uint_9 %uint_10
+        %158 = OpLoad %_arr_uint_int_2 %g_altValues
+               OpReturnValue %158
+        %136 = OpLabel
+        %137 = OpExtInst %void %2 DebugScope %126
+               OpUnreachable
+               OpFunctionEnd)";
+
+  SetTargetEnv(SPV_ENV_UNIVERSAL_1_5);
+  SinglePassRunAndMatch<MergeReturnPass>(text, true);
+}
+
 }  // namespace
 }  // namespace opt
 }  // namespace spvtools

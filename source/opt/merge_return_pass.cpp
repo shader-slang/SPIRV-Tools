@@ -952,8 +952,13 @@ bool MergeReturnPass::CreateSingleCaseSwitch(BasicBlock* merge_target) {
   for (auto pos = old_block->begin(); pos != old_block->end(); ++pos) {
     if (pos->GetShaderDebugOpcode() ==
         NonSemanticShaderDebugInfoDebugFunctionDefinition) {
-      start_block->AddInstruction(MakeUnique<Instruction>(*pos));
-      pos.Erase();
+      // Relocate the existing node: the def-use manager and other analyses key
+      // on the Instruction's address, so its attached debug-line instructions
+      // and registrations stay valid when only its containing block changes.
+      Instruction* debug_def = &*pos;
+      debug_def->RemoveFromList();
+      start_block->AddInstruction(std::unique_ptr<Instruction>(debug_def));
+      context()->set_instr_block(debug_def, start_block);
       break;
     }
   }
