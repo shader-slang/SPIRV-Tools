@@ -2662,13 +2662,69 @@ TEST_F(MergeReturnPassTest, DebugFunctionDefinitionStillInEntryBlock) {
   SinglePassRunAndMatch<MergeReturnPass>(text, true);
 }
 
-// Keeps the def-use manager that merge-return left behind. The pass itself
-// does not preserve that analysis, and rebuilding it would hide a dangling
-// user pointer.
-class MergeReturnPassKeepDefUse : public MergeReturnPass {
+// Inspects the def-use manager merge-return left behind, before Pass::Run
+// discards it. Rebuilding that analysis would point at the live instructions
+// and hide a dangling user. The production pass does not preserve def-use, so
+// this check does not claim that it does.
+class MergeReturnPassCheckDefUse : public MergeReturnPass {
  public:
-  IRContext::Analysis GetPreservedAnalyses() override {
-    return MergeReturnPass::GetPreservedAnalyses() | IRContext::kAnalysisDefUse;
+  Status Process() override {
+    Status status = MergeReturnPass::Process();
+    if (status != Status::Failure) {
+      CheckDebugFunctionDefinitionUsers();
+    }
+    return status;
+  }
+
+ private:
+  void CheckDebugFunctionDefinitionUsers() {
+    Module* module = context()->module();
+    if (module->begin() == module->end()) {
+      ADD_FAILURE() << "expected a function";
+      return;
+    }
+    Function& function = *module->begin();
+    Instruction* debug_def = nullptr;
+    for (Instruction& inst : *function.entry()) {
+      if (inst.GetShaderDebugOpcode() ==
+          NonSemanticShaderDebugInfoDebugFunctionDefinition) {
+        debug_def = &inst;
+        break;
+      }
+    }
+    if (debug_def == nullptr) {
+      ADD_FAILURE()
+          << "DebugFunctionDefinition was not left in the entry block";
+      return;
+    }
+    EXPECT_EQ(debug_def, get_def_use_mgr()->GetDef(debug_def->result_id()))
+        << "def-use definition for DebugFunctionDefinition is not the "
+           "instruction left in the entry block";
+
+    if (debug_def->dbg_line_insts().size() != 1 ||
+        debug_def->dbg_line_insts().front().opcode() != spv::Op::OpLine) {
+      ADD_FAILURE()
+          << "expected one OpLine attached to DebugFunctionDefinition";
+      return;
+    }
+    Instruction* line = &debug_def->dbg_line_insts().front();
+
+    bool found_def = false;
+    get_def_use_mgr()->ForEachUser(&function.DefInst(),
+                                   [&found_def, debug_def](Instruction* user) {
+                                     if (user == debug_def) found_def = true;
+                                   });
+    EXPECT_TRUE(found_def)
+        << "DebugFunctionDefinition recorded as a user was not the "
+           "instruction left in the entry block";
+
+    bool found_line = false;
+    get_def_use_mgr()->ForEachUser(line->GetSingleWordInOperand(0),
+                                   [&found_line, line](Instruction* user) {
+                                     if (user == line) found_line = true;
+                                   });
+    EXPECT_TRUE(found_line) << "OpLine recorded as a user was not the line "
+                               "attached to the DebugFunctionDefinition";
   }
 };
 
@@ -2738,43 +2794,9 @@ TEST_F(MergeReturnPassTest, DebugFunctionDefinitionUseAfterFree) {
         OpFunctionEnd
 )";
 
-  // The id-overflow reruns build fresh modules. This check is about the
-  // def-use pointers left by a single run.
+  // Id-overflow reruns repeat this same pointer check once per bound.
   SetTestIdOverflow(false);
-  SinglePassRunAndMatch<MergeReturnPassKeepDefUse>(text, true);
-  ASSERT_NE(nullptr, context());
-
-  Function& function = *context()->module()->begin();
-  Instruction* debug_def = nullptr;
-  for (Instruction& inst : *function.entry()) {
-    if (inst.GetShaderDebugOpcode() ==
-        NonSemanticShaderDebugInfoDebugFunctionDefinition) {
-      debug_def = &inst;
-      break;
-    }
-  }
-  ASSERT_NE(nullptr, debug_def);
-  ASSERT_EQ(1u, debug_def->dbg_line_insts().size());
-  Instruction* line = &debug_def->dbg_line_insts().front();
-  ASSERT_EQ(spv::Op::OpLine, line->opcode());
-
-  bool found_def = false;
-  context()->get_def_use_mgr()->ForEachUser(
-      &function.DefInst(), [&found_def, debug_def](Instruction* user) {
-        if (user == debug_def) found_def = true;
-      });
-  EXPECT_TRUE(found_def)
-      << "DebugFunctionDefinition recorded as a user was not the "
-         "instruction left in the entry block";
-
-  bool found_line = false;
-  context()->get_def_use_mgr()->ForEachUser(
-      line->GetSingleWordInOperand(0),
-      [&found_line, line](Instruction* user) {
-        if (user == line) found_line = true;
-      });
-  EXPECT_TRUE(found_line) << "OpLine recorded as a user was not the line "
-                             "attached to the DebugFunctionDefinition";
+  SinglePassRunAndMatch<MergeReturnPassCheckDefUse>(text, true);
 }
 
 }  // namespace
